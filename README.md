@@ -1,60 +1,57 @@
-# Kokoro voice files -- GitHub hosting package
+# Kokoro voice files -- GitHub hosting package (browser-upload version)
 
-This folder contains your Kokoro TTS model files (`kokoro-v1.0.fp16.onnx`,
-already split into four ~45MB pieces so no single file exceeds GitHub's
-100MB per-file limit) plus `voices-v1.0.bin` (28MB, small enough to commit
-as-is) and a `reassemble.py` script.
+This folder contains your Kokoro TTS files, split into pieces small
+enough for GitHub's web uploader (25MB limit per file -- these are all
+under 21MB, with margin):
 
-Why split instead of using Git LFS or a GitHub Release: those both work
-fine for *you* to push, but when a Cowork sandbox later tries to pull them
-back down, GitHub redirects LFS and Release downloads to a CDN domain
+- `onnx-chunks/` -- 9 pieces of `kokoro-v1.0.fp16.onnx` (177MB total)
+- `voices-chunks/` -- 2 pieces of `voices-v1.0.bin` (28MB total)
+- `checksums.txt` -- sha256 of both original files
+- `reassemble.py` -- puts the pieces back together and verifies them
+
+Why split instead of Git LFS or a GitHub Release: those work fine to
+upload, but when a Cowork sandbox later tries to pull the files back
+down, GitHub redirects LFS/Release downloads to a CDN domain
 (`media.githubusercontent.com` / `release-assets.githubusercontent.com`)
-that's blocked by the sandbox's network policy. Plain committed files
-(regular git blobs, no LFS filter) transfer inline as part of the normal
-git clone -- no separate CDN request, no block. Splitting keeps every
-individual file under GitHub's hard blob-size cap so the push itself
-succeeds.
+that's blocked by the sandbox's network policy. Plain uploaded files
+(regular git blobs) transfer inline as part of a normal clone or
+download -- no CDN redirect, no block.
 
-## What to do with this folder
+## Uploading via the GitHub website (no git required)
 
-This needs to be pushed from a machine with normal internet access and
-your own GitHub login -- not from inside the Cowork sandbox, since that's
-exactly the environment that can't reach the outside world freely.
+1. Create a new **public** repo on github.com (needs to be public so a
+   future sandbox session can clone it without needing your login --
+   see the note on this below if you'd rather not).
+2. On the repo page, click **Add file > Upload files**.
+3. Drag in everything from this folder: `README.md`, `checksums.txt`,
+   `reassemble.py`, the full contents of `onnx-chunks/`, and the full
+   contents of `voices-chunks/`. Keep the folder structure -- GitHub's
+   uploader preserves subfolders when you drag a folder in, or you can
+   drag the two chunk folders in as separate uploads if it's easier.
+4. Commit directly to the `main` branch.
 
-1. Create a new GitHub repo (public or private, your call -- if private,
-   the sandbox will need a way to authenticate later, so public is
-   simpler unless you have a reason not to).
-2. From a terminal on your own machine, `cd` into this folder and run:
-
-   ```
-   git init
-   git add .
-   git commit -m "Kokoro voice files for faceless-video skill"
-   git branch -M main
-   git remote add origin https://github.com/<your-username>/<repo-name>.git
-   git push -u origin main
-   ```
-
-   Do **not** run `git lfs track` on any of these files -- that would
-   put them right back behind the blocked CDN this whole setup is
-   designed to avoid.
-
-3. Once pushed, tell me the repo URL. I'll wire it into the skill's
-   voice-setup logic as an automatic fallback: any future session (yours
-   or someone else's, on any machine) can run `git clone` on your repo
-   plus `python3 reassemble.py` and have working voices with zero manual
-   file placement -- no connected folder required.
+GitHub's web uploader has a per-commit file count limit too (usually
+fine for the ~13 files here, but if it complains, just upload
+`onnx-chunks/` and `voices-chunks/` as two separate commits).
 
 ## Verifying it worked
 
-After cloning the repo anywhere, run:
+Download the repo as a zip (green **Code** button > Download ZIP) or
+clone it, then run:
 
 ```
 python3 reassemble.py
 ```
 
-It reassembles the four ONNX chunks back into `kokoro-v1.0.fp16.onnx` and
-checksums both files against `checksums.txt`. Already verified once in
-the sandbox that reassembly is byte-identical to the original (matching
-sha256), so if the checksums still match after a real clone, the transfer
-was clean too.
+It reassembles both files from their chunks and checksums them against
+`checksums.txt`. Already verified once in the sandbox that reassembly
+is byte-identical to the original (matching sha256 for both files), so
+if the checksums still match after your own upload/download round trip,
+the transfer was clean too.
+
+## Once it's up
+
+Send me the repo URL. I'll wire it into the skill's voice-setup logic as
+an automatic fallback -- any future session (yours or someone else's, on
+any machine) can pull your repo and run `reassemble.py` to get working
+voices with zero manual file placement, no connected folder required.

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Run this after cloning the GitHub repo these files were pushed to.
-Reassembles the chunked ONNX model back into a single file and verifies
-both files against the recorded checksums, so you know the transfer
-(clone -> reassembly) didn't corrupt anything.
+Run this after cloning/downloading the GitHub repo these files were
+uploaded to. Reassembles both chunked files back into their originals
+and verifies them against the recorded checksums, so you know the
+transfer (upload -> download -> reassembly) didn't corrupt anything.
 
 Usage: python3 reassemble.py
 """
@@ -13,6 +13,11 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+FILES = {
+    "kokoro-v1.0.fp16.onnx": "onnx-chunks",
+    "voices-v1.0.bin": "voices-chunks",
+}
 
 
 def sha256(path):
@@ -37,33 +42,27 @@ def load_checksums():
 
 def main():
     expected = load_checksums()
-
-    # Reassemble the chunked ONNX model.
-    parts = sorted(glob.glob(os.path.join(HERE, "onnx-chunks", "*.part*")))
-    if not parts:
-        print("No chunks found in onnx-chunks/ -- did the clone finish?")
-        sys.exit(1)
-
-    out_path = os.path.join(HERE, "kokoro-v1.0.fp16.onnx")
-    print(f"Reassembling {len(parts)} chunks -> {out_path}")
-    with open(out_path, "wb") as out:
-        for part in parts:
-            with open(part, "rb") as p:
-                out.write(p.read())
-
-    # Verify both files.
     ok = True
-    for name in ("kokoro-v1.0.fp16.onnx", "voices-v1.0.bin"):
-        path = os.path.join(HERE, name)
-        if not os.path.exists(path):
-            print(f"MISSING: {name}")
+
+    for out_name, chunk_dir in FILES.items():
+        parts = sorted(glob.glob(os.path.join(HERE, chunk_dir, "*.part*")))
+        if not parts:
+            print(f"No chunks found in {chunk_dir}/ -- did the download finish?")
             ok = False
             continue
-        actual = sha256(path)
-        if actual == expected.get(name):
-            print(f"OK: {name} checksum matches")
+
+        out_path = os.path.join(HERE, out_name)
+        print(f"Reassembling {len(parts)} chunks -> {out_path}")
+        with open(out_path, "wb") as out:
+            for part in parts:
+                with open(part, "rb") as p:
+                    out.write(p.read())
+
+        actual = sha256(out_path)
+        if actual == expected.get(out_name):
+            print(f"OK: {out_name} checksum matches")
         else:
-            print(f"MISMATCH: {name} -- expected {expected.get(name)}, got {actual}")
+            print(f"MISMATCH: {out_name} -- expected {expected.get(out_name)}, got {actual}")
             ok = False
 
     if ok:
